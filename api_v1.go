@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const DEFAULT_DOC_ID_NAME = "id"
@@ -58,7 +59,8 @@ func ClaimTask(queue *mongo.Collection, from_status string, archivist string) *p
 		}}
 
 	var task primitive.M
-	err := queue.FindOneAndUpdate(context.TODO(), filter, update).Decode(&task)
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	err := queue.FindOneAndUpdate(context.TODO(), filter, update, opts).Decode(&task)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil
