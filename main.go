@@ -33,12 +33,6 @@ func connect_to_mongodb() {
 	fmt.Println("Connected to MongoDB!")
 }
 
-func ping(c *gin.Context) {
-	c.JSON(200, gin.H{
-		"message": "pong",
-	})
-}
-
 func init() {
 	connect_to_mongodb()
 }
@@ -47,6 +41,9 @@ func main() {
 
 	r.GET("/ping", ping)
 	r.HEAD("/ping", ping)
+
+	r.GET("/ping_mongodb", ping_mongodb)
+	r.HEAD("/ping_mongodb", ping_mongodb)
 
 	v1_tracker := r.Group("/v1")
 	{
