@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Meta struct {
@@ -58,10 +59,15 @@ func GetProjectsName() []string {
 }
 
 func GetProject(project_name string) *Project {
-	project_file_path := fmt.Sprintf("%s/%s/%s", PROJECTS_DIR, project_name, PROJECT_FILE)
-	project_data, _ := os.ReadFile(project_file_path)
+	// project_file_path := fmt.Sprintf("%s/%s/%s", PROJECTS_DIR, project_name, PROJECT_FILE)
+	project_file_path_safe, err := filepath.Abs(filepath.Join(PROJECTS_DIR, project_name, PROJECT_FILE))
+	if err != nil {
+		return nil
+	}
+	project_data, _ := os.ReadFile(project_file_path_safe)
 	project := Project{}
-	err := json.Unmarshal(project_data, &project)
+
+	err = json.Unmarshal(project_data, &project)
 	if err != nil {
 		return nil
 	}
