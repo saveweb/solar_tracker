@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -39,6 +40,7 @@ func init() {
 }
 func main() {
 	r := gin.Default()
+	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithOnlyDecompress(true), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
 
 	r.GET("/ping", ping)
 	r.HEAD("/ping", ping)

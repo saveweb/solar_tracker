@@ -3,6 +3,7 @@ module github.com/saveweb/solar_tracker
 go 1.22.2
 
 require (
+	github.com/gin-contrib/gzip v1.0.1
 	github.com/gin-gonic/gin v1.10.0
 	go.mongodb.org/mongo-driver v1.15.0
 )
@@ -43,3 +44,5 @@ require (
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/gin-contrib/gzip => github.com/yzqzss/gzip v1.0.1-onlydecompress2
