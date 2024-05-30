@@ -20,7 +20,8 @@ func connect_to_mongodb() {
 	fmt.Println("Connecting to MongoDB...")
 	fmt.Println("MONGODB_URI: len=", len(MONGODB_URI))
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	opts := options.Client().ApplyURI(MONGODB_URI).SetServerAPIOptions(serverAPI).SetAppName("solar-tracker")
+	opts := options.Client().ApplyURI(MONGODB_URI).SetServerAPIOptions(serverAPI).SetAppName("solar-tracker").SetCompressors([]string{"zstd", "zlib", "snappy"})
+	fmt.Println("AppName: ", *opts.AppName)
 	fmt.Println("Compressors: ", opts.Compressors)
 
 	client, err := mongo.Connect(context.TODO(), opts)
