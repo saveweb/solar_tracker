@@ -56,6 +56,7 @@ func main() {
 		v1_tracker.POST("/project/:identifier/:client_version/:archivist/claim_task", v1_claim_task)
 		v1_tracker.POST("/project/:identifier/:client_version/:archivist/update_task/:task_id", v1_update_task)
 		v1_tracker.POST("/project/:identifier/:client_version/:archivist/insert_item/:item_id", v1_insert_item)
+		v1_tracker.POST("/project/:identifier/:client_version/:archivist/insert_many/:size", v1_insert_many) // :size unused
 	}
 	r.Run()
 }
