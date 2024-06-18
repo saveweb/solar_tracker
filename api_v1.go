@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -196,19 +195,10 @@ func v1_update_task(c *gin.Context) {
 	})
 }
 
-type Item struct {
-	Item_id          string `json:"item_id"`
-	Item_id_type     string `json:"item_id_type"`
-	Item_status      string `json:"item_status"`
-	Item_status_type string `json:"item_status_type"`
-	Payload          string `json:"payload"`
-}
-
 func v1_insert_many(c *gin.Context) {
 	identifier := c.Param("identifier")
 	client_version := c.Param("client_version")
 	archivist := c.Param("archivist")
-	top_items_rawString := c.PostForm("items")
 
 	if is_safe_sting(identifier) && is_safe_sting(archivist) {
 		// OK
@@ -235,11 +225,11 @@ func v1_insert_many(c *gin.Context) {
 	db := mongoClient.Database(project.Mongodb.DbName)
 	item_collection := db.Collection(project.Mongodb.ItemCollection)
 
+	// Parse JSON
 	topItems := []Item{}
-	err := json.Unmarshal([]byte(top_items_rawString), &topItems)
-	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid JSON items"})
-		panic(err)
+	if err := c.ShouldBindJSON(&topItems); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
 	}
 
 	var doc_id_name string
@@ -323,10 +313,28 @@ func v1_insert_item(c *gin.Context) {
 	archivist := c.Param("archivist")
 	item_id_str := c.Param("item_id")
 
-	item_id_type := c.PostForm("item_id_type")         // str, int
-	item_status := c.PostForm("item_status")           // item status
-	item_status_type := c.PostForm("item_status_type") // None, str, int
-	payload := c.PostForm("payload")                   // Any JSON string
+	var item_id_type, item_status, item_status_type, payload string
+
+	if c.ContentType() == "application/json" {
+		item := Item{}
+		if err := c.ShouldBindJSON(&item); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if item.Item_id != item_id_str {
+			c.JSON(400, gin.H{"error": "item_id in URL does not match item_id in JSON"})
+			return
+		}
+		item_id_type = item.Item_id_type
+		item_status = item.Item_status
+		item_status_type = item.Item_status_type
+		payload = item.Payload
+	} else {
+		item_id_type = c.PostForm("item_id_type")         // str, int
+		item_status = c.PostForm("item_status")           // item status
+		item_status_type = c.PostForm("item_status_type") // None, str, int
+		payload = c.PostForm("payload")                   // Any JSON string
+	}
 
 	if is_safe_sting(identifier) && is_safe_sting(archivist) {
 		// OK
