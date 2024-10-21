@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/jellydator/ttlcache/v3"
 )
 
 type Meta struct {
@@ -58,7 +61,22 @@ func GetProjectsName() []string {
 	return projects
 }
 
+var projectCache = ttlcache.New[string, *Project](
+	ttlcache.WithTTL[string, *Project](5*time.Second),
+	ttlcache.WithDisableTouchOnHit[string, *Project](),
+)
+
+func init() {
+	fmt.Println("init project cache...")
+	go projectCache.Start()
+	fmt.Println("init project cache, done.")
+}
+
 func GetProject(project_name string) *Project {
+	item := projectCache.Get(project_name)
+	if item != nil {
+		return item.Value()
+	}
 	// project_file_path := fmt.Sprintf("%s/%s/%s", PROJECTS_DIR, project_name, PROJECT_FILE)
 	project_file_path_safe, err := filepath.Abs(filepath.Join(PROJECTS_DIR, project_name, PROJECT_FILE))
 	if err != nil {
@@ -69,8 +87,10 @@ func GetProject(project_name string) *Project {
 
 	err = json.Unmarshal(project_data, &project)
 	if err != nil {
-		return nil
+		return nil // return nil if project not found
 	}
+
+	projectCache.Set(project_name, &project, ttlcache.DefaultTTL)
 	return &project
 }
 
