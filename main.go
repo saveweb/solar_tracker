@@ -41,7 +41,7 @@ func init() {
 }
 func main() {
 	r := gin.Default()
-	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithOnlyDecompress(true), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
+	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithDecompressOnly(), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
 
 	r.GET("/ping", ping)
 	r.HEAD("/ping", ping)
