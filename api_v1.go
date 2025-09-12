@@ -160,12 +160,13 @@ func v1_update_task(c *gin.Context) {
 	queue := db.Collection(project.Mongodb.QueueCollection)
 
 	var filter bson.M
-	if task_id_type == "int" {
+	switch task_id_type {
+	case "int":
 		task_id, _ := strconv.ParseInt(task_id_str, 10, 64)
 		filter = bson.M{doc_id_name: task_id}
-	} else if task_id_type == "str" {
+	case "str":
 		filter = bson.M{doc_id_name: task_id_str}
-	} else {
+	default:
 		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 		return
 	}
@@ -239,37 +240,39 @@ func v1_insert_many(c *gin.Context) {
 		doc_id_name = DEFAULT_DOC_ID_NAME
 	}
 
-	documents := []interface{}{}
+	documents := []any{}
 
 	for _, item := range topItems {
 		document := bson.M{}
 		// id
-		if item.Item_id_type == "str" {
+		switch item.Item_id_type {
+		case "str":
 			document[doc_id_name] = item.Item_id
-		} else if item.Item_id_type == "int" {
+		case "int":
 			item_id_int, err := strconv.ParseInt(item.Item_id, 10, 64)
 			if err != nil {
 				c.JSON(400, gin.H{"error": "Invalid item_id"})
 				return
 			}
 			document[doc_id_name] = item_id_int
-		} else {
+		default:
 			c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 			return
 		}
 		// status
-		if item.Item_status_type == "str" {
+		switch item.Item_status_type {
+		case "str":
 			document["status"] = item.Item_status
-		} else if item.Item_status_type == "int" {
+		case "int":
 			status, err := strconv.ParseInt(item.Item_status, 10, 64)
 			if err != nil {
 				c.JSON(400, gin.H{"error": "Invalid item_status"})
 				return
 			}
 			document["status"] = status
-		} else if item.Item_status_type == "None" {
+		case "None":
 			document["status"] = nil
-		} else {
+		default:
 			c.JSON(400, gin.H{"error": "Invalid status_type"})
 			return
 		}
@@ -370,32 +373,34 @@ func v1_insert_item(c *gin.Context) {
 
 	document := bson.M{}
 	// id
-	if item_id_type == "str" {
+	switch item_id_type {
+	case "str":
 		document[doc_id_name] = item_id_str
-	} else if item_id_type == "int" {
+	case "int":
 		item_id_int, err := strconv.ParseInt(item_id_str, 10, 64)
 		if err != nil {
 			c.JSON(400, gin.H{"error": "Invalid item_id"})
 			return
 		}
 		document[doc_id_name] = item_id_int
-	} else {
+	default:
 		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 		return
 	}
 	// status
-	if item_status_type == "str" {
+	switch item_status_type {
+	case "str":
 		document["status"] = item_status
-	} else if item_status_type == "int" {
+	case "int":
 		status, err := strconv.ParseInt(item_status, 10, 64)
 		if err != nil {
 			c.JSON(400, gin.H{"error": "Invalid item_status"})
 			return
 		}
 		document["status"] = status
-	} else if item_status_type == "None" {
+	case "None":
 		document["status"] = nil
-	} else {
+	default:
 		c.JSON(400, gin.H{"error": "Invalid status_type"})
 		return
 	}
