@@ -31,8 +31,6 @@ type Mongodb struct {
 	DbName          string `json:"db_name"`
 	ItemCollection  string `json:"item_collection"`
 	QueueCollection string `json:"queue_collection"`
-	CustomDocIDName string `json:"custom_doc_id_name"` // CustomIDName 目前只是为了兼容 lowapk_v2 存档项目而留的字段。它用的 feed_id 而不是 id
-	// 计划未来等转换好数据库 scheme 之后就弃用。
 }
 
 type Project struct {

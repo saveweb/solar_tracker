@@ -148,14 +148,6 @@ func v1_update_task(c *gin.Context) {
 		return
 	}
 
-	// 为了兼容 lowapk_v2 存档项目。它数据库用的 feed_id 而不是 id
-	var doc_id_name string
-	if project.Mongodb.CustomDocIDName != "" {
-		doc_id_name = project.Mongodb.CustomDocIDName
-	} else {
-		doc_id_name = DEFAULT_DOC_ID_NAME
-	}
-
 	db := mongoClient.Database(project.Mongodb.DbName)
 	queue := db.Collection(project.Mongodb.QueueCollection)
 
@@ -163,9 +155,9 @@ func v1_update_task(c *gin.Context) {
 	switch task_id_type {
 	case "int":
 		task_id, _ := strconv.ParseInt(task_id_str, 10, 64)
-		filter = bson.M{doc_id_name: task_id}
+		filter = bson.M{DEFAULT_DOC_ID_NAME: task_id}
 	case "str":
-		filter = bson.M{doc_id_name: task_id_str}
+		filter = bson.M{DEFAULT_DOC_ID_NAME: task_id_str}
 	default:
 		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 		return
@@ -233,13 +225,6 @@ func v1_insert_many(c *gin.Context) {
 		return
 	}
 
-	var doc_id_name string
-	if project.Mongodb.CustomDocIDName != "" {
-		doc_id_name = project.Mongodb.CustomDocIDName
-	} else {
-		doc_id_name = DEFAULT_DOC_ID_NAME
-	}
-
 	documents := []any{}
 
 	for _, item := range topItems {
@@ -247,14 +232,14 @@ func v1_insert_many(c *gin.Context) {
 		// id
 		switch item.Item_id_type {
 		case "str":
-			document[doc_id_name] = item.Item_id
+			document[DEFAULT_DOC_ID_NAME] = item.Item_id
 		case "int":
 			item_id_int, err := strconv.ParseInt(item.Item_id, 10, 64)
 			if err != nil {
 				c.JSON(400, gin.H{"error": "Invalid item_id"})
 				return
 			}
-			document[doc_id_name] = item_id_int
+			document[DEFAULT_DOC_ID_NAME] = item_id_int
 		default:
 			c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 			return
@@ -364,25 +349,18 @@ func v1_insert_item(c *gin.Context) {
 	db := mongoClient.Database(project.Mongodb.DbName)
 	item_collection := db.Collection(project.Mongodb.ItemCollection)
 
-	var doc_id_name string
-	if project.Mongodb.CustomDocIDName != "" {
-		doc_id_name = project.Mongodb.CustomDocIDName
-	} else {
-		doc_id_name = DEFAULT_DOC_ID_NAME
-	}
-
 	document := bson.M{}
 	// id
 	switch item_id_type {
 	case "str":
-		document[doc_id_name] = item_id_str
+		document[DEFAULT_DOC_ID_NAME] = item_id_str
 	case "int":
 		item_id_int, err := strconv.ParseInt(item_id_str, 10, 64)
 		if err != nil {
 			c.JSON(400, gin.H{"error": "Invalid item_id"})
 			return
 		}
-		document[doc_id_name] = item_id_int
+		document[DEFAULT_DOC_ID_NAME] = item_id_int
 	default:
 		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 		return
