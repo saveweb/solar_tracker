@@ -19,29 +19,30 @@ func withBanlist(c *gin.Context) {
 
 	if archivist != "" {
 		wg.Go(func() {
-			r := valkeyClient.Do(context.Background(), valkeyClient.B().Get().Key("banlist:archivist:"+archivist).Build())
+			r := valkeyClient.Do(context.Background(), valkeyClient.B().Exists().Key("banlist:archivist:"+archivist).Build())
 			if r.Error() != nil {
 				log.Printf("valkey get banlist: %v", r.Error()) // passthrough on error
-			} else {
+			} else if k, _ := r.AsInt64(); k > 0 {
 				archivistBan = true
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "NO means NO! (A)"})
 			}
 		})
 	}
 	if ip != "" {
 		wg.Go(func() {
-			r := valkeyClient.Do(context.Background(), valkeyClient.B().Get().Key("banlist:ip:"+ip).Build())
+			r := valkeyClient.Do(context.Background(), valkeyClient.B().Exists().Key("banlist:ip:"+ip).Build())
 			if r.Error() != nil {
 				log.Printf("valkey get banlist: %v", r.Error()) // passthrough on error
-			} else {
+			} else if k, _ := r.AsInt64(); k > 0 {
 				ipBan = true
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "NO means NO! (I)"})
 			}
 		})
 	}
 	wg.Wait()
 
 	if archivistBan || ipBan {
+		log.Println("Blocked request from", ip, "archivist:", archivist)
+		c.JSON(http.StatusForbidden, gin.H{"error": "No means No!"})
+		c.Abort()
 		return
 	}
 
