@@ -1,5 +1,5 @@
 .vscode/
-__pycache__/
 data/
 __debug_bin*
 solar_tracker
+.env

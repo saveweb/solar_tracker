@@ -5,7 +5,6 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: always
-    hostname: solar_tracker
     command: ["/app/solar_tracker"]
     ports:
       - "127.0.0.74:8088:8088"
@@ -13,3 +12,14 @@ services:
       - PORT=8088
       - GIN_MODE=release
       - MONGODB_URI=${MONGODB_URI}
+      - VALKEY_INIT_ADDRESS=valkey:6379
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    depends_on:
+      - valkey
+  valkey:
+    image: valkey/valkey:latest
+    restart: always
+    command: ["valkey-server", "--save", "60", "1"]
+    volumes:
+      - ./data/valkey_data:/data
+
