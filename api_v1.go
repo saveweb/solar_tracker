@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const DEFAULT_DOC_ID_NAME = "id"
+const ID = "id"
 
 func v1_project(c *gin.Context) {
 	identifier := c.Param("identifier")
@@ -155,9 +155,9 @@ func v1_update_task(c *gin.Context) {
 	switch task_id_type {
 	case "int":
 		task_id, _ := strconv.ParseInt(task_id_str, 10, 64)
-		filter = bson.M{DEFAULT_DOC_ID_NAME: task_id}
+		filter = bson.M{ID: task_id}
 	case "str":
-		filter = bson.M{DEFAULT_DOC_ID_NAME: task_id_str}
+		filter = bson.M{ID: task_id_str}
 	default:
 		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 		return
@@ -232,14 +232,14 @@ func v1_insert_many(c *gin.Context) {
 		// id
 		switch item.Item_id_type {
 		case "str":
-			document[DEFAULT_DOC_ID_NAME] = item.Item_id
+			document[ID] = item.Item_id
 		case "int":
 			item_id_int, err := strconv.ParseInt(item.Item_id, 10, 64)
 			if err != nil {
 				c.JSON(400, gin.H{"error": "Invalid item_id"})
 				return
 			}
-			document[DEFAULT_DOC_ID_NAME] = item_id_int
+			document[ID] = item_id_int
 		default:
 			c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 			return
@@ -277,14 +277,12 @@ func v1_insert_many(c *gin.Context) {
 	opt := options.InsertMany().SetOrdered(false)
 	result, err := item_collection.InsertMany(context.TODO(), documents, opt)
 	// if err is BulkWriteException
-	if err != nil {
-		if !errors.As(err, &mongo.BulkWriteException{}) {
-			c.JSON(500, gin.H{"error": "Failed to insert items"})
-			panic(err)
-		}
-		// BulkWriteException is expected
+	if err != nil && !errors.As(err, &mongo.BulkWriteException{}) {
+		c.JSON(500, gin.H{"error": "Failed to insert items"})
+		panic(err)
 	}
 
+	// BulkWriteException is expected in case of some duplicate key errors
 	bulkWriteException, _ := err.(mongo.BulkWriteException)
 	c.JSON(200, gin.H{
 		"InsertedIDs":       result.InsertedIDs,
@@ -353,14 +351,14 @@ func v1_insert_item(c *gin.Context) {
 	// id
 	switch item_id_type {
 	case "str":
-		document[DEFAULT_DOC_ID_NAME] = item_id_str
+		document[ID] = item_id_str
 	case "int":
 		item_id_int, err := strconv.ParseInt(item_id_str, 10, 64)
 		if err != nil {
 			c.JSON(400, gin.H{"error": "Invalid item_id"})
 			return
 		}
-		document[DEFAULT_DOC_ID_NAME] = item_id_int
+		document[ID] = item_id_int
 	default:
 		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
 		return
@@ -395,7 +393,7 @@ func v1_insert_item(c *gin.Context) {
 	result, err := item_collection.InsertOne(context.TODO(), document)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			c.JSON(500, gin.H{"error": "Failed to insert item, duplicate key"})
+			c.JSON(200, gin.H{"error": "Failed to insert item, duplicate key"})
 			return
 		}
 		c.JSON(500, gin.H{"error": "Failed to insert item"})
