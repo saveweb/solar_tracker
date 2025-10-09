@@ -1,0 +1,15 @@
+services:
+  solar_tracker:
+    image: solar_tracker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    hostname: solar_tracker
+    command: ["/app/solar_tracker"]
+    ports:
+      - "127.0.0.74:8088:8088"
+    environment:
+      - PORT=8088
+      - GIN_MODE=release
+      - MONGODB_URI=${MONGODB_URI}
