@@ -65,7 +65,7 @@ func GetProjectsName() []string {
 }
 
 var projectCache = ttlcache.New(
-	ttlcache.WithTTL[string, *Project](5*time.Second),
+	ttlcache.WithTTL[string, *Project](10*time.Second),
 	ttlcache.WithDisableTouchOnHit[string, *Project](),
 )
 
