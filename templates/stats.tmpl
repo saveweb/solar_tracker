@@ -203,6 +203,11 @@
             `;
             eventLog.appendChild(eventDiv);
             eventLog.scrollTop = eventLog.scrollHeight;
+
+            // Limit event log to 100 entries
+            while (eventLog.children.length > 100) {
+                eventLog.removeChild(eventLog.firstChild);
+            }
         };
 
         eventSource.onerror = function(error) {
