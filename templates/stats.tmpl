@@ -156,8 +156,7 @@
         function updateLeaderboard() {
             const leaderboardList = document.getElementById('leaderboard-list');
             const sortedArchivists = Object.entries(archivistTasks)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10); // Top 10
+                .sort((a, b) => b[1] - a[1]);
 
             leaderboardList.innerHTML = '';
             sortedArchivists.forEach(([archivist, tasks]) => {
