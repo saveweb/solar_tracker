@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Stats - {{.identifier}}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .stat {
+            text-align: center;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .stat h2 {
+            margin: 0;
+            font-size: 2em;
+            color: #e26331ff;
+        }
+        .stat p {
+            margin: 5px 0 0 0;
+            color: #666;
+        }
+        .events {
+            margin-top: 30px;
+        }
+        .events h2 {
+            color: #333;
+        }
+        #event-log {
+            border: 1px solid #ddd;
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #fafafa;
+            border-radius: 4px;
+        }
+        .event {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #b8590bff;
+            background: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .event .time {
+            font-size: 0.8em;
+            color: #999;
+        }
+        .leaderboard {
+            margin-top: 30px;
+        }
+        .leaderboard h2 {
+            color: #333;
+        }
+        .leaderboard ul {
+            list-style: none;
+            padding: 0;
+        }
+        .leaderboard li {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            border-left: 3px solid;
+            display: flex;
+            justify-content: space-between;
+        }
+        .leaderboard li:nth-child(odd) {
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Project Stats - {{.identifier}}</h1>
+        <div class="stats">
+            <div class="stat">
+                <h2 id="total-tasks">0</h2>
+                <p>Archived Items</p>
+            </div>
+            <div class="stat">
+                <h2 id="active-archivists">0</h2>
+                <p>Active Archivists</p>
+            </div>
+            <div class="stat">
+                <h2 id="recent-events">0</h2>
+                <p>Recent Events</p>
+            </div>
+            <div class="stat">
+                <h2 id="uptime">00:00:00</h2>
+                <p>Elapsed Time</p>
+            </div>
+        </div>
+        <div class="events">
+            <h2>Live Events</h2>
+            <div id="event-log"></div>
+        </div>
+        <div class="leaderboard">
+            <h2>Leaderboard</h2>
+            <ul id="leaderboard-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const identifier = '{{.identifier}}';
+        const eventSource = new EventSource(`/stats/live/${identifier}/sse`);
+        let totalTasks = 0;
+        let activeArchivists = new Set();
+        let recentEvents = 0;
+        let archivistTasks = {};
+        const startTime = Date.now();
+
+        // Uptime timer
+        setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const seconds = Math.floor(elapsed / 1000) % 60;
+            const minutes = Math.floor(elapsed / 60000) % 60;
+            const hours = Math.floor(elapsed / 3600000);
+            document.getElementById('uptime').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+
+        function getArchivistColor(archivist) {
+            let hash = 0;
+            for (let i = 0; i < archivist.length; i++) {
+                hash = ((hash << 5) - hash) + archivist.charCodeAt(i);
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            const hue = Math.abs(hash) % 360;
+            return `hsl(${hue}, 70%, 50%)`;
+        }
+
+        function updateLeaderboard() {
+            const leaderboardList = document.getElementById('leaderboard-list');
+            const sortedArchivists = Object.entries(archivistTasks)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Top 10
+
+            leaderboardList.innerHTML = '';
+            sortedArchivists.forEach(([archivist, tasks]) => {
+                const li = document.createElement('li');
+                li.style.borderLeftColor = getArchivistColor(archivist);
+                li.innerHTML = `<span>${archivist}</span><span>${tasks} items</span>`;
+                leaderboardList.appendChild(li);
+            });
+        }
+
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            console.log('Received event:', data);
+
+            // Update total archived tasks
+            if (data.archived) {
+                totalTasks += data.tasks;
+            }
+            document.getElementById('total-tasks').textContent = totalTasks;
+
+            // Update active archivists
+            activeArchivists.add(data.archivist);
+            document.getElementById('active-archivists').textContent = activeArchivists.size;
+
+            // Update recent events count
+            recentEvents++;
+            document.getElementById('recent-events').textContent = recentEvents;
+
+            // Update archivist tasks
+            if (data.archived) {
+                archivistTasks[data.archivist] = (archivistTasks[data.archivist] || 0) + data.tasks;
+                updateLeaderboard();
+            }
+
+            // Add event to log
+            const eventLog = document.getElementById('event-log');
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'event';
+            eventDiv.style.borderLeftColor = getArchivistColor(data.archivist);
+            eventDiv.innerHTML = `
+                <span class="message">${data.archivist}: ${data.message}</span>
+                <span class="time">${new Date().toLocaleString()}</span>
+            `;
+            eventLog.appendChild(eventDiv);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        };
+
+        eventSource.onerror = function(error) {
+            console.error('SSE error:', error);
+        };
+    </script>
+</body>
+</html>

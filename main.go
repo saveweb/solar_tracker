@@ -25,6 +25,7 @@ func init() {
 
 func main() {
 	r := gin.Default()
+	r.LoadHTMLGlob("templates/*")
 	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithDecompressOnly(), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
 
 	r.GET("/ping", ping)
@@ -52,6 +53,12 @@ func main() {
 		adminApi.GET("/banlist", admin_list_banlist)
 		adminApi.POST("/banlist/:type/:id", admin_banlist)
 		adminApi.DELETE("/banlist/:type/:id", admin_unbanlist)
+	}
+
+	panel := r.Group("/stats")
+	{
+		panel.GET("/live/:identifier", stats_panel)
+		panel.GET("/live/:identifier/sse", SSEHeadersMiddleware(), sse_stream)
 	}
 
 	r.Run()
