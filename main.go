@@ -1,6 +1,8 @@
 package main
 
 import (
+	"embed"
+	"html/template"
 	"os"
 	"sync"
 
@@ -23,9 +25,13 @@ func init() {
 	wg.Wait()
 }
 
+//go:embed templates/*
+var embedFS embed.FS
+
 func main() {
 	r := gin.Default()
-	r.LoadHTMLGlob("templates/*")
+	tmpl := template.Must(template.New("").ParseFS(embedFS, "templates/*.html"))
+	r.SetHTMLTemplate(tmpl)
 	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithDecompressOnly(), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
 
 	r.GET("/ping", ping)
