@@ -31,7 +31,7 @@ var embedFS embed.FS
 
 func main() {
 	r := gin.Default()
-	tmpl := template.Must(template.New("").ParseFS(embedFS, "templates/*.html"))
+	tmpl := template.Must(template.New("").ParseFS(embedFS, "templates/*"))
 	r.SetHTMLTemplate(tmpl)
 	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithDecompressOnly(), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
 
