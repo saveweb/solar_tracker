@@ -115,12 +115,17 @@ func v1_claim_task(c *gin.Context) {
 		return
 	}
 	c.JSON(200, task)
-	archiveEventChan <- ArchiveEvent{
+
+	select {
+	case archiveEventChan <- ArchiveEvent{
 		ProjectID: project.Meta.Identifier,
 		Archivist: archivist,
 		Message:   fmt.Sprintf("claimed task:%v", (*task)["id"]),
 		Tasks:     1,
 		Archived:  false,
+	}:
+	default:
+		fmt.Println("archiveEventChan is full, dropping event")
 	}
 }
 
@@ -194,12 +199,16 @@ func v1_update_task(c *gin.Context) {
 		"msg": "Task updated successfully",
 	})
 
-	archiveEventChan <- ArchiveEvent{
+	select {
+	case archiveEventChan <- ArchiveEvent{
 		ProjectID: project.Meta.Identifier,
 		Archivist: archivist,
 		Message:   fmt.Sprintf("set task:%s to status:%s", task_id_str, status),
 		Tasks:     1,
 		Archived:  false,
+	}:
+	default:
+		fmt.Println("archiveEventChan is full, dropping event")
 	}
 }
 
@@ -306,12 +315,16 @@ func v1_insert_many(c *gin.Context) {
 		"Labels":            len(bulkWriteException.Labels),
 		"WriteConcernError": bulkWriteException.WriteConcernError,
 	})
-	archiveEventChan <- ArchiveEvent{
+
+	select {
+	case archiveEventChan <- ArchiveEvent{
 		ProjectID: project.Meta.Identifier,
 		Archivist: archivist,
 		Archived:  true,
 		Message:   fmt.Sprintf("tried %d items, inserted %d items", len(topItems), len(result.InsertedIDs)),
-		Tasks:     len(result.InsertedIDs),
+	}:
+	default:
+		fmt.Println("archiveEventChan is full, dropping event")
 	}
 }
 
@@ -430,11 +443,16 @@ func v1_insert_item(c *gin.Context) {
 		"_id": result.InsertedID,
 		"msg": "Item inserted successfully",
 	})
-	archiveEventChan <- ArchiveEvent{
+
+	select {
+	case archiveEventChan <- ArchiveEvent{
 		ProjectID: project.Meta.Identifier,
 		Archivist: archivist,
 		Archived:  true,
 		Message:   fmt.Sprintf("inserted item:%v", document[ID]),
 		Tasks:     1,
+	}:
+	default:
+		fmt.Println("archiveEventChan is full, dropping event")
 	}
 }

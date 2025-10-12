@@ -72,7 +72,7 @@ func sse_stream(c *gin.Context) {
 		return
 	}
 
-	returnsChan := make(chan valkey.PubSubMessage)
+	returnsChan := make(chan valkey.PubSubMessage, 100)
 
 	go func() {
 		defer close(returnsChan)
