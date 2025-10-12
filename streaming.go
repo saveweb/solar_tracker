@@ -53,11 +53,11 @@ func publishArchiveEvent(event ArchiveEvent) {
 
 func stats_panel(c *gin.Context) {
 	identifier := c.Param("identifier")
-	// project := GetProject(identifier)
-	// if !project.Status.Public {
-	// 	c.JSON(403, gin.H{"error": "Project is not public"})
-	// 	return
-	// }
+	project := GetProject(identifier)
+	if !project.Status.Public {
+		c.JSON(403, gin.H{"error": "Project is not public"})
+		return
+	}
 	c.HTML(200, "stats.tmpl", gin.H{
 		"identifier": identifier,
 	})
@@ -65,6 +65,13 @@ func stats_panel(c *gin.Context) {
 
 func sse_stream(c *gin.Context) {
 	identifier := c.Param("identifier")
+
+	project := GetProject(identifier)
+	if !project.Status.Public {
+		c.JSON(403, gin.H{"error": "Project is not public"})
+		return
+	}
+
 	returnsChan := make(chan valkey.PubSubMessage)
 
 	go func() {
