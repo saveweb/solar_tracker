@@ -31,7 +31,7 @@ type Status struct {
 
 type Client struct {
 	Version        string  `json:"version" bson:"version"`
-	ClaimTaskDelay float32 `json:"claim_task_delay" bson:"claim_task_delay"`
+	ClaimTaskDelay float64 `json:"claim_task_delay" bson:"claim_task_delay"`
 }
 
 type Mongodb struct {

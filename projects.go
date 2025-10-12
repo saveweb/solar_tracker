@@ -24,7 +24,7 @@ type Status struct {
 
 type Client struct {
 	Version        string  `json:"version" bson:"version"`                   // 推荐 "大版本.小版本"。版本不对会拒绝各种请求。
-	ClaimTaskDelay float32 `json:"claim_task_delay" bson:"claim_task_delay"` // claim_task 之后多久才能再次 claim_task
+	ClaimTaskDelay float64 `json:"claim_task_delay" bson:"claim_task_delay"` // claim_task 之后多久才能再次 claim_task
 }
 
 type Mongodb struct {
