@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -209,7 +210,7 @@ func v1_insert_item(c echo.Context) error {
 
 	var item_id_type, item_status, item_status_type, payload string
 
-	if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON {
+	if strings.HasPrefix(strings.ToLower(c.Request().Header.Get(echo.HeaderContentType)), echo.MIMEApplicationJSON) {
 		item := Item{}
 		if err := c.Bind(&item); err != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
@@ -262,7 +263,7 @@ func v1_insert_item(c echo.Context) error {
 		}
 		document[ID] = item_id_int
 	default:
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid task_id_type"})
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid task_id_type", "item_id_type": item_id_type})
 	}
 	// status
 	switch item_status_type {
