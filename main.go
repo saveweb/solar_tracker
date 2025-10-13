@@ -47,7 +47,7 @@ func startProfiler() (*pyroscope.Profiler, error) {
 	return pyroscope.Start(pyroscope.Config{
 		ApplicationName: "solar_tracker",
 		ServerAddress:   "https://service-" + "pyroscope" + ".saveweb.org/",
-		Logger:          pyroscope.StandardLogger,
+		Logger:          nil,
 		Tags:            map[string]string{"hostname": os.Getenv("HOSTNAME")},
 		ProfileTypes: []pyroscope.ProfileType{
 			// these profile types are enabled by default:

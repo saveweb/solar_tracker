@@ -42,11 +42,19 @@ func publishArchiveEvent(event ArchiveEvent) {
 	}
 }
 
+func reverse(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}
+
 func stats_panel(c echo.Context) error {
-	identifier := c.Param("identifier")
+	identifier := reverse(c.Param("identifier"))
 	project := GetProject(identifier)
-	if !project.Status.Public {
-		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public"})
+	if project == nil || !project.Status.Public {
+		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public or does not exist"})
 	}
 	return c.Render(http.StatusOK, "stats.html", echo.Map{
 		"identifier": identifier,
@@ -57,8 +65,8 @@ func sse_stream(c echo.Context) error {
 	identifier := c.Param("identifier")
 
 	project := GetProject(identifier)
-	if !project.Status.Public {
-		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public"})
+	if project == nil || !project.Status.Public {
+		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public or does not exist"})
 	}
 
 	log.Printf("SSE client connected, ip: %v", c.RealIP())
