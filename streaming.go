@@ -48,7 +48,7 @@ func stats_panel(c echo.Context) error {
 	if !project.Status.Public {
 		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public"})
 	}
-	return c.Render(http.StatusOK, "stats.tmpl", echo.Map{
+	return c.Render(http.StatusOK, "stats.html", echo.Map{
 		"identifier": identifier,
 	})
 }
