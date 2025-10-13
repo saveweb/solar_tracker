@@ -7,99 +7,91 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 )
 
-func withBanlist(c *gin.Context) {
-	archivist := c.Param("archivist")
-	ip := c.ClientIP()
-	var archivistBan, ipBan bool
+func withBanlist(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		archivist := c.Param("archivist")
+		ip := c.RealIP()
+		var archivistBan, ipBan bool
 
-	wg := sync.WaitGroup{}
+		wg := sync.WaitGroup{}
 
-	if archivist != "" {
-		wg.Go(func() {
-			r := valkeyClient.Do(context.Background(), valkeyClient.B().Exists().Key("banlist:archivist:"+archivist).Build())
-			if r.Error() != nil {
-				log.Printf("valkey get banlist: %v", r.Error()) // passthrough on error
-			} else if k, _ := r.AsInt64(); k > 0 {
-				archivistBan = true
-			}
-		})
+		if archivist != "" {
+			wg.Go(func() {
+				r := valkeyClient.Do(context.Background(), valkeyClient.B().Exists().Key("banlist:archivist:"+archivist).Build())
+				if r.Error() != nil {
+					log.Printf("valkey get banlist: %v", r.Error()) // passthrough on error
+				} else if k, _ := r.AsInt64(); k > 0 {
+					archivistBan = true
+				}
+			})
+		}
+		if ip != "" {
+			wg.Go(func() {
+				r := valkeyClient.Do(context.Background(), valkeyClient.B().Exists().Key("banlist:ip:"+ip).Build())
+				if r.Error() != nil {
+					log.Printf("valkey get banlist: %v", r.Error()) // passthrough on error
+				} else if k, _ := r.AsInt64(); k > 0 {
+					ipBan = true
+				}
+			})
+		}
+		wg.Wait()
+
+		if archivistBan || ipBan {
+			log.Println("Blocked request from", ip, "archivist:", archivist)
+			return c.JSON(http.StatusForbidden, echo.Map{"error": "No means No!"})
+		}
+
+		return next(c)
 	}
-	if ip != "" {
-		wg.Go(func() {
-			r := valkeyClient.Do(context.Background(), valkeyClient.B().Exists().Key("banlist:ip:"+ip).Build())
-			if r.Error() != nil {
-				log.Printf("valkey get banlist: %v", r.Error()) // passthrough on error
-			} else if k, _ := r.AsInt64(); k > 0 {
-				ipBan = true
-			}
-		})
-	}
-	wg.Wait()
-
-	if archivistBan || ipBan {
-		log.Println("Blocked request from", ip, "archivist:", archivist)
-		c.JSON(http.StatusForbidden, gin.H{"error": "No means No!"})
-		c.Abort()
-		return
-	}
-
-	c.Next()
 }
 
-func admin_banlist(c *gin.Context) {
+func admin_banlist(c echo.Context) error {
 	typ := c.Param("type")
 	id := c.Param("id")
 	if typ != "archivist" && typ != "ip" {
-		c.JSON(400, gin.H{"error": "invalid type"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid type"})
 	}
 	if id == "" {
-		c.JSON(400, gin.H{"error": "invalid id"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid id"})
 	}
 	key := "banlist:" + typ + ":" + id
 	r := valkeyClient.Do(context.Background(), valkeyClient.B().Set().Key(key).Value("1").Build())
 	if r.Error() != nil {
-		c.JSON(500, gin.H{"error": r.Error().Error()})
-		return
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": r.Error().Error()})
 	}
-	c.JSON(200, gin.H{"result": "added to banlist"})
+	return c.JSON(http.StatusOK, echo.Map{"result": "added to banlist"})
 }
 
-func admin_unbanlist(c *gin.Context) {
+func admin_unbanlist(c echo.Context) error {
 	typ := c.Param("type")
 	id := c.Param("id")
 	if typ != "archivist" && typ != "ip" {
-		c.JSON(400, gin.H{"error": "invalid type"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid type"})
 	}
 	if id == "" {
-		c.JSON(400, gin.H{"error": "invalid id"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid id"})
 	}
 	key := "banlist:" + typ + ":" + id
 	r := valkeyClient.Do(context.Background(), valkeyClient.B().Del().Key(key).Build())
 	if r.Error() != nil {
-		c.JSON(500, gin.H{"error": r.Error().Error()})
-		return
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": r.Error().Error()})
 	}
-	c.JSON(200, gin.H{"result": "removed from banlist"})
+	return c.JSON(http.StatusOK, echo.Map{"result": "removed from banlist"})
 }
 
-func admin_list_banlist(c *gin.Context) {
+func admin_list_banlist(c echo.Context) error {
 	prefix := "banlist:"
 	r := valkeyClient.Do(context.Background(), valkeyClient.B().Keys().Pattern(prefix+"*").Build())
 	if r.Error() != nil {
-		c.JSON(500, gin.H{"error": r.Error().Error()})
-		return
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": r.Error().Error()})
 	}
 	keys, err := r.AsStrSlice()
 	if err != nil {
-		c.JSON(500, gin.H{"error": "invalid valkey response"})
-		return
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "invalid valkey response"})
 	}
 	banlist := strings.Builder{}
 	for _, key := range keys {
@@ -107,5 +99,5 @@ func admin_list_banlist(c *gin.Context) {
 		banlist.WriteString(id)
 		banlist.WriteString("\n")
 	}
-	c.String(http.StatusOK, banlist.String())
+	return c.String(http.StatusOK, banlist.String())
 }

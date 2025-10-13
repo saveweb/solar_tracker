@@ -7,9 +7,8 @@ services:
     restart: always
     command: ["/app/solar_tracker"]
     ports:
-      - "127.0.0.74:8088:8088"
+      - "127.0.0.74:8088:8080"
     environment:
-      - PORT=8088
       - GIN_MODE=release
       - MONGODB_URI=${MONGODB_URI}
       - VALKEY_INIT_ADDRESS=valkey:6379

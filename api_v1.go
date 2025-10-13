@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,29 +17,26 @@ import (
 
 const ID = "id"
 
-func v1_project(c *gin.Context) {
+func v1_project(c echo.Context) error {
 	identifier := c.Param("identifier")
 	if !is_safe_sting(identifier) {
-		c.JSON(400, gin.H{"error": "Invalid identifier"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid identifier"})
 	}
 	project := GetProject(identifier)
 	if project == nil {
-		c.JSON(404, gin.H{
+		return c.JSON(http.StatusNotFound, echo.Map{
 			"error": fmt.Sprintf("Project %s not found", identifier),
 		})
-		return
 	}
-	c.JSON(200, project)
+	return c.JSON(http.StatusOK, project)
 }
 
-func v1_projects(c *gin.Context) {
+func v1_projects(c echo.Context) error {
 	projects := GetProjects()
 	pub_projects := []Project{}
-	show_private := c.Query("show_private")
+	show_private := c.QueryParam("show_private")
 	if show_private != "" {
-		c.JSON(200, projects)
-		return
+		return c.JSON(http.StatusOK, projects)
 	}
 
 	for _, project := range projects {
@@ -46,7 +44,7 @@ func v1_projects(c *gin.Context) {
 			pub_projects = append(pub_projects, project)
 		}
 	}
-	c.JSON(200, pub_projects)
+	return c.JSON(http.StatusOK, pub_projects)
 }
 
 func ClaimTask(queue *mongo.Collection, from_status string, archivist string) *primitive.M {
@@ -71,37 +69,33 @@ func ClaimTask(queue *mongo.Collection, from_status string, archivist string) *p
 	return &task
 }
 
-func v1_claim_task(c *gin.Context) {
+func v1_claim_task(c echo.Context) error {
 	identifier := c.Param("identifier")
 	client_version := c.Param("client_version")
 	archivist := c.Param("archivist")
 	if is_safe_sting(identifier) && is_safe_sting(archivist) {
 		// OK
 	} else {
-		c.JSON(400, gin.H{"error": "Invalid identifier or archivist"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid identifier or archivist"})
 	}
 
 	project := GetProject(identifier)
 	if project == nil {
-		c.JSON(404, gin.H{
+		return c.JSON(http.StatusNotFound, echo.Map{
 			"error": fmt.Sprintf("Project %s not found", identifier),
 		})
-		return
 	}
 	// 暂停后不再接受新的 claim_task 请求。
 	if project.Status.Paused {
-		c.JSON(400, gin.H{
+		return c.JSON(http.StatusBadRequest, echo.Map{
 			"error": "Project paused",
 		})
-		return
 	}
 	if client_version != project.Client.Version {
-		c.JSON(400, gin.H{
+		return c.JSON(http.StatusBadRequest, echo.Map{
 			"error": "Client version not supported",
 			"msg":   fmt.Sprintf("Please update to version %s", project.Client.Version),
 		})
-		return
 	}
 
 	db := mongoClient.Database(project.Mongodb.DbName)
@@ -109,12 +103,10 @@ func v1_claim_task(c *gin.Context) {
 
 	task := ClaimTask(queue, "TODO", archivist)
 	if task == nil {
-		c.JSON(404, gin.H{
+		return c.JSON(http.StatusNotFound, echo.Map{
 			"error": "No task available",
 		})
-		return
 	}
-	c.JSON(200, task)
 
 	select {
 	case archiveEventChan <- ArchiveEvent{
@@ -127,37 +119,36 @@ func v1_claim_task(c *gin.Context) {
 	default:
 		fmt.Println("archiveEventChan is full, dropping event")
 	}
+
+	return c.JSON(http.StatusOK, task)
 }
 
-func v1_update_task(c *gin.Context) {
+func v1_update_task(c echo.Context) error {
 	identifier := c.Param("identifier")
 	client_version := c.Param("client_version")
 	archivist := c.Param("archivist")
 	task_id_str := c.Param("task_id")
 
-	status := c.PostForm("status")
-	task_id_type := c.PostForm("task_id_type")
+	status := c.FormValue("status")
+	task_id_type := c.FormValue("task_id_type")
 
 	if is_safe_sting(identifier) && is_safe_sting(archivist) {
 		// OK
 	} else {
-		c.JSON(400, gin.H{"error": "Invalid parameter or query string"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid parameter or query string"})
 	}
 
 	project := GetProject(identifier)
 	if project == nil {
-		c.JSON(404, gin.H{
+		return c.JSON(http.StatusNotFound, echo.Map{
 			"error": fmt.Sprintf("Project %s not found", identifier),
 		})
-		return
 	}
 	if client_version != project.Client.Version {
-		c.JSON(400, gin.H{
+		return c.JSON(http.StatusBadRequest, echo.Map{
 			"error": "Client version not supported",
 			"msg":   fmt.Sprintf("Please update to version %s", project.Client.Version),
 		})
-		return
 	}
 
 	db := mongoClient.Database(project.Mongodb.DbName)
@@ -171,8 +162,7 @@ func v1_update_task(c *gin.Context) {
 	case "str":
 		filter = bson.M{ID: task_id_str}
 	default:
-		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid task_id_type"})
 	}
 
 	update := bson.M{
@@ -186,18 +176,12 @@ func v1_update_task(c *gin.Context) {
 	err := queue.FindOneAndUpdate(context.TODO(), filter, update).Decode(&updated_doc)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			c.JSON(404, gin.H{
+			return c.JSON(http.StatusNotFound, echo.Map{
 				"error": "Task not found",
 			})
-			return
 		}
 		panic(err)
 	}
-
-	c.JSON(200, gin.H{
-		"_id": updated_doc["_id"],
-		"msg": "Task updated successfully",
-	})
 
 	select {
 	case archiveEventChan <- ArchiveEvent{
@@ -210,125 +194,14 @@ func v1_update_task(c *gin.Context) {
 	default:
 		fmt.Println("archiveEventChan is full, dropping event")
 	}
-}
 
-func v1_insert_many(c *gin.Context) {
-	identifier := c.Param("identifier")
-	client_version := c.Param("client_version")
-	archivist := c.Param("archivist")
-
-	if is_safe_sting(identifier) && is_safe_sting(archivist) {
-		// OK
-	} else {
-		c.JSON(400, gin.H{"error": "Invalid parameter or query string"})
-		return
-	}
-
-	project := GetProject(identifier)
-	if project == nil {
-		c.JSON(404, gin.H{
-			"error": fmt.Sprintf("Project %s not found", identifier),
-		})
-		return
-	}
-	if client_version != project.Client.Version {
-		c.JSON(400, gin.H{
-			"error": "Client version not supported",
-			"msg":   fmt.Sprintf("Please update to version %s", project.Client.Version),
-		})
-		return
-	}
-
-	db := mongoClient.Database(project.Mongodb.DbName)
-	item_collection := db.Collection(project.Mongodb.ItemCollection)
-
-	// Parse JSON
-	topItems := []Item{}
-	if err := c.ShouldBindJSON(&topItems); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-
-	documents := []any{}
-
-	for _, item := range topItems {
-		document := bson.M{}
-		// id
-		switch item.Item_id_type {
-		case "str":
-			document[ID] = item.Item_id
-		case "int":
-			item_id_int, err := strconv.ParseInt(item.Item_id, 10, 64)
-			if err != nil {
-				c.JSON(400, gin.H{"error": "Invalid item_id"})
-				return
-			}
-			document[ID] = item_id_int
-		default:
-			c.JSON(400, gin.H{"error": "Invalid task_id_type"})
-			return
-		}
-		// status
-		switch item.Item_status_type {
-		case "str":
-			document["status"] = item.Item_status
-		case "int":
-			status, err := strconv.ParseInt(item.Item_status, 10, 64)
-			if err != nil {
-				c.JSON(400, gin.H{"error": "Invalid item_status"})
-				return
-			}
-			document["status"] = status
-		case "None":
-			document["status"] = nil
-		default:
-			c.JSON(400, gin.H{"error": "Invalid status_type"})
-			return
-		}
-		// payload
-		var payload_BSON primitive.M
-		err := bson.UnmarshalExtJSON([]byte(item.Payload), true, &payload_BSON)
-		if err != nil {
-			c.JSON(400, gin.H{"error": "Invalid JSON payload"})
-			panic(err)
-		}
-		document["payload"] = payload_BSON
-
-		documents = append(documents, document)
-	}
-
-	// do insert, sorted=false
-	opt := options.InsertMany().SetOrdered(false)
-	result, err := item_collection.InsertMany(context.TODO(), documents, opt)
-	// if err is BulkWriteException
-	if err != nil && !errors.As(err, &mongo.BulkWriteException{}) {
-		c.JSON(500, gin.H{"error": "Failed to insert items"})
-		panic(err)
-	}
-
-	// BulkWriteException is expected in case of some duplicate key errors
-	bulkWriteException, _ := err.(mongo.BulkWriteException)
-	c.JSON(200, gin.H{
-		"InsertedIDs":       result.InsertedIDs,
-		"msg":               "Items bulk insert actions done successfully",
-		"WriteErrors":       len(bulkWriteException.WriteErrors),
-		"Labels":            len(bulkWriteException.Labels),
-		"WriteConcernError": bulkWriteException.WriteConcernError,
+	return c.JSON(http.StatusOK, echo.Map{
+		"_id": updated_doc["_id"],
+		"msg": "Task updated successfully",
 	})
-
-	select {
-	case archiveEventChan <- ArchiveEvent{
-		ProjectID: project.Meta.Identifier,
-		Archivist: archivist,
-		Archived:  true,
-		Message:   fmt.Sprintf("tried %d items, inserted %d items", len(topItems), len(result.InsertedIDs)),
-	}:
-	default:
-		fmt.Println("archiveEventChan is full, dropping event")
-	}
 }
 
-func v1_insert_item(c *gin.Context) {
+func v1_insert_item(c echo.Context) error {
 	identifier := c.Param("identifier")
 	client_version := c.Param("client_version")
 	archivist := c.Param("archivist")
@@ -336,47 +209,42 @@ func v1_insert_item(c *gin.Context) {
 
 	var item_id_type, item_status, item_status_type, payload string
 
-	if c.ContentType() == "application/json" {
+	if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON {
 		item := Item{}
-		if err := c.ShouldBindJSON(&item); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
+		if err := c.Bind(&item); err != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 		}
 		if item.Item_id != item_id_str {
-			c.JSON(400, gin.H{"error": "item_id in URL does not match item_id in JSON"})
-			return
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "item_id in URL does not match item_id in JSON"})
 		}
 		item_id_type = item.Item_id_type
 		item_status = item.Item_status
 		item_status_type = item.Item_status_type
 		payload = item.Payload
 	} else {
-		item_id_type = c.PostForm("item_id_type")         // str, int
-		item_status = c.PostForm("item_status")           // item status
-		item_status_type = c.PostForm("item_status_type") // None, str, int
-		payload = c.PostForm("payload")                   // Any JSON string
+		item_id_type = c.FormValue("item_id_type")         // str, int
+		item_status = c.FormValue("item_status")           // item status
+		item_status_type = c.FormValue("item_status_type") // None, str, int
+		payload = c.FormValue("payload")                   // Any JSON string
 	}
 
 	if is_safe_sting(identifier) && is_safe_sting(archivist) {
 		// OK
 	} else {
-		c.JSON(400, gin.H{"error": "Invalid parameter or query string"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid parameter or query string"})
 	}
 
 	project := GetProject(identifier)
 	if project == nil {
-		c.JSON(404, gin.H{
+		return c.JSON(http.StatusNotFound, echo.Map{
 			"error": fmt.Sprintf("Project %s not found", identifier),
 		})
-		return
 	}
 	if client_version != project.Client.Version {
-		c.JSON(400, gin.H{
+		return c.JSON(http.StatusBadRequest, echo.Map{
 			"error": "Client version not supported",
 			"msg":   fmt.Sprintf("Please update to version %s", project.Client.Version),
 		})
-		return
 	}
 
 	db := mongoClient.Database(project.Mongodb.DbName)
@@ -390,13 +258,11 @@ func v1_insert_item(c *gin.Context) {
 	case "int":
 		item_id_int, err := strconv.ParseInt(item_id_str, 10, 64)
 		if err != nil {
-			c.JSON(400, gin.H{"error": "Invalid item_id"})
-			return
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid item_id"})
 		}
 		document[ID] = item_id_int
 	default:
-		c.JSON(400, gin.H{"error": "Invalid task_id_type"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid task_id_type"})
 	}
 	// status
 	switch item_status_type {
@@ -405,22 +271,19 @@ func v1_insert_item(c *gin.Context) {
 	case "int":
 		status, err := strconv.ParseInt(item_status, 10, 64)
 		if err != nil {
-			c.JSON(400, gin.H{"error": "Invalid item_status"})
-			return
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid item_status"})
 		}
 		document["status"] = status
 	case "None":
 		document["status"] = nil
 	default:
-		c.JSON(400, gin.H{"error": "Invalid status_type"})
-		return
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid status_type"})
 	}
 	// payload
 	var payload_BSON primitive.M
 	err := bson.UnmarshalExtJSON([]byte(payload), true, &payload_BSON)
 	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid JSON payload"})
-		panic(err)
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid JSON payload"})
 	}
 	document["payload"] = payload_BSON
 
@@ -428,21 +291,13 @@ func v1_insert_item(c *gin.Context) {
 	result, err := item_collection.InsertOne(context.TODO(), document)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			c.JSON(200, gin.H{"error": "Failed to insert item, duplicate key"})
-			return
+			return c.JSON(http.StatusOK, echo.Map{"error": "Failed to insert item, duplicate key"})
 		}
-		c.JSON(500, gin.H{"error": "Failed to insert item"})
-		panic(err)
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to insert item"})
 	}
 	if result.InsertedID == nil {
-		c.JSON(500, gin.H{"error": "Failed to insert item"})
-		panic("Failed to insert item")
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to insert item"})
 	}
-
-	c.JSON(200, gin.H{
-		"_id": result.InsertedID,
-		"msg": "Item inserted successfully",
-	})
 
 	select {
 	case archiveEventChan <- ArchiveEvent{
@@ -455,4 +310,116 @@ func v1_insert_item(c *gin.Context) {
 	default:
 		fmt.Println("archiveEventChan is full, dropping event")
 	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"_id": result.InsertedID,
+		"msg": "Item inserted successfully",
+	})
+}
+
+func v1_insert_many(c echo.Context) error {
+	identifier := c.Param("identifier")
+	client_version := c.Param("client_version")
+	archivist := c.Param("archivist")
+
+	if is_safe_sting(identifier) && is_safe_sting(archivist) {
+		// OK
+	} else {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid parameter or query string"})
+	}
+
+	project := GetProject(identifier)
+	if project == nil {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"error": fmt.Sprintf("Project %s not found", identifier),
+		})
+	}
+	if client_version != project.Client.Version {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"error": "Client version not supported",
+			"msg":   fmt.Sprintf("Please update to version %s", project.Client.Version),
+		})
+	}
+
+	db := mongoClient.Database(project.Mongodb.DbName)
+	item_collection := db.Collection(project.Mongodb.ItemCollection)
+
+	// Parse JSON
+	topItems := []Item{}
+	if err := c.Bind(&topItems); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
+
+	documents := []any{}
+
+	for _, item := range topItems {
+		document := bson.M{}
+		// id
+		switch item.Item_id_type {
+		case "str":
+			document[ID] = item.Item_id
+		case "int":
+			item_id_int, err := strconv.ParseInt(item.Item_id, 10, 64)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid item_id"})
+			}
+			document[ID] = item_id_int
+		default:
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid task_id_type"})
+		}
+		// status
+		switch item.Item_status_type {
+		case "str":
+			document["status"] = item.Item_status
+		case "int":
+			status, err := strconv.ParseInt(item.Item_status, 10, 64)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid item_status"})
+			}
+			document["status"] = status
+		case "None":
+			document["status"] = nil
+		default:
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid status_type"})
+		}
+		// payload
+		var payload_BSON primitive.M
+		err := bson.UnmarshalExtJSON([]byte(item.Payload), true, &payload_BSON)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid JSON payload"})
+		}
+		document["payload"] = payload_BSON
+
+		documents = append(documents, document)
+	}
+
+	// do insert, sorted=false
+	opt := options.InsertMany().SetOrdered(false)
+	result, err := item_collection.InsertMany(context.TODO(), documents, opt)
+	// if err is BulkWriteException
+	if err != nil && !errors.As(err, &mongo.BulkWriteException{}) {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Failed to insert items"})
+	}
+
+	// BulkWriteException is expected in case of some duplicate key errors
+	bulkWriteException, _ := err.(mongo.BulkWriteException)
+
+	select {
+	case archiveEventChan <- ArchiveEvent{
+		ProjectID: project.Meta.Identifier,
+		Archivist: archivist,
+		Archived:  true,
+		Message:   fmt.Sprintf("tried %d items, inserted %d items", len(topItems), len(result.InsertedIDs)),
+	}:
+	default:
+		fmt.Println("archiveEventChan is full, dropping event")
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"InsertedIDs":       result.InsertedIDs,
+		"msg":               "Items bulk insert actions done successfully",
+		"WriteErrors":       len(bulkWriteException.WriteErrors),
+		"Labels":            len(bulkWriteException.Labels),
+		"WriteConcernError": bulkWriteException.WriteConcernError,
+	})
 }

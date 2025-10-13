@@ -4,11 +4,12 @@ import (
 	"embed"
 	_ "embed"
 	"html/template"
+	"io"
 	"os"
 	"sync"
 
-	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 var MONGODB_URI string = os.Getenv("MONGODB_URI")
@@ -29,20 +30,35 @@ func init() {
 //go:embed templates/*
 var embedFS embed.FS
 
+type Template struct {
+	templates *template.Template
+}
+
+func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	return t.templates.ExecuteTemplate(w, name, data)
+}
+
 func main() {
-	r := gin.Default()
-	tmpl := template.Must(template.New("").ParseFS(embedFS, "templates/*"))
-	r.SetHTMLTemplate(tmpl)
-	r.Use(gzip.Gzip(gzip.NoCompression, gzip.WithDecompressOnly(), gzip.WithDecompressFn(gzip.DefaultDecompressHandle)))
+	e := echo.New()
+	t := &Template{
+		templates: template.Must(template.New("").ParseFS(embedFS, "templates/*")),
+	}
+	e.Renderer = t
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format:           "${time_custom} |${status}| ${remote_ip} | ${method} \"${uri}\" ${latency_human} e=${error}, in=${bytes_in} out=${bytes_out}\n",
+		CustomTimeFormat: "2006-01-02 15:04:05",
+	}))
+	e.Use(middleware.Recover())
+	e.Use(middleware.Decompress())
 
-	r.GET("/ping", ping)
-	r.HEAD("/ping", ping)
+	e.GET("/ping", ping)
+	e.HEAD("/ping", ping)
 
-	r.GET("/ping_mongodb", ping_mongodb)
-	r.HEAD("/ping_mongodb", ping_mongodb)
+	e.GET("/ping_mongodb", ping_mongodb)
+	e.HEAD("/ping_mongodb", ping_mongodb)
 
-	v1_tracker := r.Group("/v1")
-	v1_tracker_with_banlist := r.Group("/v1", withBanlist)
+	v1_tracker := e.Group("/v1")
+	v1_tracker_with_banlist := e.Group("/v1", withBanlist)
 	{
 		v1_tracker.POST("/projects", v1_projects)
 		v1_tracker.POST("/project/:identifier", v1_project)
@@ -52,8 +68,11 @@ func main() {
 		v1_tracker_with_banlist.POST("/project/:identifier/:client_version/:archivist/insert_many/:size", v1_insert_many) // :size unused
 	}
 
-	admin := r.Group("/admin", gin.BasicAuth(gin.Accounts{
-		"admin": ADMIN_PASSWORD,
+	admin := e.Group("/admin", middleware.BasicAuth(func(username, password string, c echo.Context) (bool, error) {
+		if username == "admin" && password == ADMIN_PASSWORD {
+			return true, nil
+		}
+		return false, nil
 	}))
 	adminApi := admin.Group("/api")
 	{
@@ -62,11 +81,11 @@ func main() {
 		adminApi.DELETE("/banlist/:type/:id", admin_unbanlist)
 	}
 
-	panel := r.Group("/stats")
+	panel := e.Group("/stats")
 	{
 		panel.GET("/live/:identifier", stats_panel)
-		panel.GET("/live/:identifier/sse", SSEHeadersMiddleware(), sse_stream)
+		panel.GET("/live/:identifier/sse", sse_stream)
 	}
 
-	r.Run()
+	e.Logger.Fatal(e.Start(":8080"))
 }

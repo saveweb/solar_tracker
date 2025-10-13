@@ -5,20 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 	"github.com/valkey-io/valkey-go"
 )
-
-func SSEHeadersMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Content-Type", "text/event-stream")
-		c.Writer.Header().Set("Cache-Control", "no-cache")
-		c.Writer.Header().Set("Connection", "keep-alive")
-		c.Writer.Header().Set("Transfer-Encoding", "chunked")
-		c.Next()
-	}
-}
 
 type ArchiveEvent struct {
 	ProjectID string `json:"project_id"`
@@ -51,42 +42,52 @@ func publishArchiveEvent(event ArchiveEvent) {
 	}
 }
 
-func stats_panel(c *gin.Context) {
+func stats_panel(c echo.Context) error {
 	identifier := c.Param("identifier")
 	project := GetProject(identifier)
 	if !project.Status.Public {
-		c.JSON(403, gin.H{"error": "Project is not public"})
-		return
+		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public"})
 	}
-	c.HTML(200, "stats.tmpl", gin.H{
+	return c.Render(http.StatusOK, "stats.tmpl", echo.Map{
 		"identifier": identifier,
 	})
 }
 
-func sse_stream(c *gin.Context) {
+func sse_stream(c echo.Context) error {
 	identifier := c.Param("identifier")
 
 	project := GetProject(identifier)
 	if !project.Status.Public {
-		c.JSON(403, gin.H{"error": "Project is not public"})
-		return
+		return c.JSON(http.StatusForbidden, echo.Map{"error": "Project is not public"})
 	}
 
+	log.Printf("SSE client connected, ip: %v", c.RealIP())
 	returnsChan := make(chan valkey.PubSubMessage, 100)
 
 	go func() {
 		defer close(returnsChan)
-		valkeyClient.Receive(c,
+		valkeyClient.Receive(c.Request().Context(),
 			valkeyClient.B().Subscribe().Channel("sse-"+identifier).Build(), func(msg valkey.PubSubMessage) {
 				returnsChan <- msg
 			})
 	}()
 
-	c.Stream(func(w io.Writer) bool {
-		for msg := range returnsChan {
-			c.SSEvent("message", msg.Message)
-			return true
+	w := c.Response()
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	for msg := range returnsChan {
+		select {
+		case <-c.Request().Context().Done():
+			return nil
+		default:
 		}
-		return false
-	})
+		if _, err := io.WriteString(w, "event: message\ndata: "+msg.Message+"\n\n"); err != nil {
+			return err
+		}
+		w.Flush()
+	}
+
+	return nil
 }

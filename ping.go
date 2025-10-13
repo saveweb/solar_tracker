@@ -1,18 +1,19 @@
 package main
 
 import (
+	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo/v4"
 )
 
-func ping(c *gin.Context) {
-	c.JSON(200, gin.H{
+func ping(c echo.Context) error {
+	return c.JSON(http.StatusOK, echo.Map{
 		"message": "pong",
 	})
 }
 
-func ping_mongodb(c *gin.Context) {
+func ping_mongodb(c echo.Context) error {
 	primaryChan := make(chan time.Duration)
 	nearestChan := make(chan time.Duration)
 	errChan := make(chan error)
@@ -35,13 +36,13 @@ func ping_mongodb(c *gin.Context) {
 	NearestErr := <-errChan
 
 	if PrimaryErr != nil || NearestErr != nil {
-		c.JSON(500, gin.H{
+		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"message":             "MongoDB is down?",
 			"PrimaryEalapsedTime": PrimaryEalapsedTime.Milliseconds(),
 			"NearestEalapsedTime": NearestEalapsedTime.Milliseconds(),
 		})
 	} else {
-		c.JSON(200, gin.H{
+		return c.JSON(http.StatusOK, echo.Map{
 			"message":             "MongoDB is up",
 			"PrimaryEalapsedTime": PrimaryEalapsedTime.Milliseconds(),
 			"NearestEalapsedTime": NearestEalapsedTime.Milliseconds(),
