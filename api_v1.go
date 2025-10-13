@@ -411,6 +411,7 @@ func v1_insert_many(c echo.Context) error {
 		Archivist: archivist,
 		Archived:  true,
 		Message:   fmt.Sprintf("tried %d items, inserted %d items", len(topItems), len(result.InsertedIDs)),
+		Tasks:     len(result.InsertedIDs),
 	}:
 	default:
 		fmt.Println("archiveEventChan is full, dropping event")
