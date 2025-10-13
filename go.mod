@@ -3,6 +3,7 @@ module github.com/saveweb/solar_tracker
 go 1.25.0
 
 require (
+	github.com/grafana/pyroscope-go v1.2.7
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/valkey-io/valkey-go v1.0.66
@@ -11,6 +12,7 @@ require (
 
 require (
 	github.com/golang/snappy v1.0.0 // indirect
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect

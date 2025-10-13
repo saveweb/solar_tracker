@@ -5,9 +5,12 @@ import (
 	_ "embed"
 	"html/template"
 	"io"
+	"log"
 	"os"
+	"runtime"
 	"sync"
 
+	"github.com/grafana/pyroscope-go"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -38,7 +41,38 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
+func startProfiler() (*pyroscope.Profiler, error) {
+	runtime.SetMutexProfileFraction(5)
+	runtime.SetBlockProfileRate(5)
+	return pyroscope.Start(pyroscope.Config{
+		ApplicationName: "solar_tracker",
+		ServerAddress:   "https://service-" + "pyroscope" + ".saveweb.org/",
+		Logger:          pyroscope.StandardLogger,
+		Tags:            map[string]string{"hostname": os.Getenv("HOSTNAME")},
+		ProfileTypes: []pyroscope.ProfileType{
+			// these profile types are enabled by default:
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileAllocSpace,
+			pyroscope.ProfileInuseObjects,
+			pyroscope.ProfileInuseSpace,
+			// these profile types are optional:
+			pyroscope.ProfileGoroutines,
+			pyroscope.ProfileMutexCount,
+			pyroscope.ProfileMutexDuration,
+			pyroscope.ProfileBlockCount,
+			pyroscope.ProfileBlockDuration,
+		},
+	})
+}
+
 func main() {
+	profiler, err := startProfiler()
+	if err != nil {
+		log.Fatalf("failed to start profiler: %v", err)
+	}
+	defer profiler.Stop()
+
 	e := echo.New()
 	t := &Template{
 		templates: template.Must(template.New("").ParseFS(embedFS, "templates/*")),
